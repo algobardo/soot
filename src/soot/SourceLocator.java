@@ -118,6 +118,7 @@ public class SourceLocator
 		switch( Options.v().src_prec() ) {
             case Options.src_prec_class:
                 classProviders.add(classFileClassProvider);
+                classProviders.add(new DexClassProvider());
                 classProviders.add(new JimpleClassProvider());
                 classProviders.add(new JavaClassProvider());
                 break;
