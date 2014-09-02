@@ -2,6 +2,7 @@
 /lib
 /classes
 /.classpath
+/.gradle
 /sootOutput
 # IntelliJ IDEA project dir
 .idea
