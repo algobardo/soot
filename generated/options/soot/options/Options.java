@@ -41,6 +41,7 @@ public class Options extends OptionsBase {
     public static final int src_prec_jimple = 3;
     public static final int src_prec_java = 4;
     public static final int src_prec_apk = 5;
+    public static final int src_prec_dex = 6;
     public static final int output_format_J = 1;
     public static final int output_format_jimple = 1;
     public static final int output_format_j = 2;
