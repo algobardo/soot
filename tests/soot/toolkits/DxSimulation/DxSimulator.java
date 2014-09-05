@@ -1,6 +1,6 @@
 package soot.toolkits.DxSimulation;
 
-import com.android.dx.dex.DexOptions;
+import com.android.dx.command.dexer.Main;
 
 /**
  * Created by mezzetti on 05/09/14.
@@ -8,7 +8,14 @@ import com.android.dx.dex.DexOptions;
 public class DxSimulator {
 
     public void runSimulation() {
-        DexOptions dop;
+
+        Main.Arguments arg = new Main.Arguments();
+        arg.coreLibrary = true;
+
+
+
+//        com.android.dx.command.dexer.Main.run()
+
     }
 
 }
