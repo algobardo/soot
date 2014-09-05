@@ -6,8 +6,10 @@ xmlprinter.jar=libs/AXMLPrinter2.jar
 polyglot.jar=libs/polyglot.jar
 
 ## Location of Guava classes jar
-guava.jar=libs/guava.jar
+guava.jar=./libs/guava.jar
 
+## Location of dx
+dx.jar=./libs/dx.jar
 
 dexlib2.jar=libs/dexlib2-2.0.3-dev.jar
 dexlib-utils.jar=libs/util-2.0.3-dev.jar

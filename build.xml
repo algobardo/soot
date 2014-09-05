@@ -198,7 +198,7 @@
         <javac
             srcdir="tests"
             destdir="testclasses"
-            classpath="classes:${polyglot.jar}:${jasmin.jar}:${junit.jar}:${hamcrest.jar}"
+            classpath="classes:${polyglot.jar}:${jasmin.jar}:${junit.jar}:${hamcrest.jar}:${dx.jar}"
             debug="true"
             />
     </target>
@@ -217,6 +217,7 @@
                 <pathelement location="${dexlib-utils.jar}"/>
                 <pathelement location="${heros.jar}"/>
            		<pathelement location="${asm.jar}"/>
+                <pathelement location="${dx.jar}"/>
             </classpath>
 			
 			<jvmarg value="-ea" />

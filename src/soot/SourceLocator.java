@@ -136,6 +136,9 @@ public class SourceLocator
                 break;
             case Options.src_prec_dex:
                 classProviders.add(new DexClassProvider());
+                classProviders.add(classFileClassProvider);
+                classProviders.add(new JimpleClassProvider());
+                classProviders.add(new JavaClassProvider());
                 break;
             case Options.src_prec_apk:
                 classProviders.add(new DexClassProvider());

@@ -28,6 +28,7 @@
       <sourceFolder url="file://$MODULE_DIR$/generated/options" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/generated/sablecc" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/generated/singletons" isTestSource="false" />
+      <excludeFolder url="file://$MODULE_DIR$/lib" />
     </content>
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="inheritedJdk" />
