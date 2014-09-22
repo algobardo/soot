@@ -37,13 +37,20 @@ import org.jf.dexlib2.iface.value.EncodedValue;
 import org.jf.dexlib2.iface.value.TypeEncodedValue;
 
 import soot.Body;
+import soot.G;
 import soot.MethodSource;
 import soot.Modifier;
 import soot.RefType;
 import soot.SootClass;
+import soot.SootField;
 import soot.SootMethod;
 import soot.SootResolver;
 import soot.Type;
+import soot.Unit;
+import soot.jimple.AssignStmt;
+import soot.jimple.FieldRef;
+import soot.jimple.Jimple;
+import soot.jimple.toolkits.typing.TypeAssigner;
 import soot.options.Options;
 
 /**
@@ -140,10 +147,50 @@ public class DexMethod {
 
         // sets the method source by adding its body as the active body
         sm.setSource(new MethodSource() {
-        	public Body getBody(SootMethod m, String phaseName) {
-        		m.setActiveBody(dexBody.jimplify(m));
-        		return m.getActiveBody();
-        	}
+            public Body getBody(SootMethod m, String phaseName) {
+                Body b = Jimple.v().newBody(m);
+                try {
+                    dexBody.jimplify(b, m);
+                } catch (InvalidDalvikBytecodeException e) {
+                    String msg = "Warning: Invalid bytecode in method "+ m +": "+ e;
+                    G.v().out.println(msg);
+                    Util.emptyBody(b);
+                    Util.addRuntimeExceptionAfterUnit(b, b.getUnits().getLast(), "Soot has detected that this method contains invalid Dalvik bytecode which would have throw an exception at runtime. ["+ msg +"]");
+                    TypeAssigner.v().transform(b);
+                }
+                m.setActiveBody(b);
+                
+                // Remove field's constant value tags if field is
+                // initialized in <clinit>.
+                // If a static final field is both initialized with a 
+                // constant value tag and <clinit>, only the constant
+                // value tag is taken into account (tested on JVM).
+                // Ex: if the constant value tag is 0x00 for field f, 
+                // and field f is initialized in <clinit> with 
+                // File.separatorChar, the value of f at runtime will be
+                // 0x00 (JVM).
+                // This seems to occur with the current version of dexlib2-2.0.3
+                // whose method  sf.getInitialValue() returns initial values it 
+                // should not.
+                if (m.getName().equals("<clinit>")) {
+                	for (Unit u: b.getUnits()) {
+                		if (u instanceof AssignStmt) {
+                			AssignStmt ass = (AssignStmt)u;
+                			if (ass.getLeftOp() instanceof FieldRef) {
+                				FieldRef fr = (FieldRef)ass.getLeftOp();
+                				SootField f = fr.getField();
+                				f.removeTag("StringConstantValueTag");
+                				f.removeTag("LongConstantValueTag");
+                				f.removeTag("DoubleConstantValueTag");
+                				f.removeTag("FloatConstantValueTag");
+                				f.removeTag("IntegerConstantValueTag");
+                			}
+                		}
+                	}
+                }
+                
+                return m.getActiveBody();
+            }
         });
 
         return sm;

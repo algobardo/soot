@@ -556,15 +556,16 @@ public class DexPrinter {
     	return annotations;
     }
 
-    private Set<Annotation> buildMethodParameterAnnotations(SootMethod m) {
+    private Set<Annotation> buildMethodParameterAnnotations(SootMethod m,
+    		final int paramIdx) {
     	Set<String> skipList = new HashSet<String>();
     	Set<Annotation> annotations = buildCommonAnnotations(m, skipList);
     	
     	for (Tag t : m.getTags()) {
-            if (t.getName().equals("VisibilityParameterAnnotationTag")){
+            if (t.getName().equals("VisibilityParameterAnnotationTag")) {
                 VisibilityParameterAnnotationTag vat = (VisibilityParameterAnnotationTag)t;
                 List<ImmutableAnnotation> visibilityItems = buildVisibilityParameterAnnotationTag
-                		(vat, skipList);
+                		(vat, skipList, paramIdx);
             	annotations.addAll(visibilityItems);
             }
     	}
@@ -655,13 +656,17 @@ public class DexPrinter {
 	}
 
     private List<ImmutableAnnotation> buildVisibilityParameterAnnotationTag
-			(VisibilityParameterAnnotationTag t, Set<String> skipList) {
+    		(VisibilityParameterAnnotationTag t, Set<String> skipList,
+    				int paramIdx) {
 		if (t.getVisibilityAnnotations() == null)
     		return Collections.emptyList();
-    	
+		
+        int paramTagIdx = 0;
     	List<ImmutableAnnotation> annotations = new ArrayList<ImmutableAnnotation>();
         for (VisibilityAnnotationTag vat : t.getVisibilityAnnotations()) {
-        	if (vat.getAnnotations() != null)
+        	if (paramTagIdx == paramIdx
+        			&& vat != null
+        			&& vat.getAnnotations() != null)
 	        	for (AnnotationTag at : vat.getAnnotations()) {
 		            String type = at.getType();
 		            if (!skipList.add(type))
@@ -688,6 +693,7 @@ public class DexPrinter {
 		            		elements);
 		            annotations.add(ann);
 	        	}
+        	paramTagIdx++;
         }
         return annotations;
     }
@@ -810,7 +816,7 @@ public class DexPrinter {
 	        	for (Type tp : sm.getParameterTypes()) {
 	        		String paramType = SootToDexUtils.getDexTypeDescriptor(tp);
 	        		parameters.add(new ImmutableMethodParameter(paramType,
-	        				buildMethodParameterAnnotations(sm),
+	        				buildMethodParameterAnnotations(sm, paramIdx),
 	        				sm.isConcrete() && parameterNames != null ?
 	        						parameterNames.get(paramIdx) : null));
 	        		paramIdx++;
@@ -916,37 +922,18 @@ public class DexPrinter {
 		
 		MethodImplementationBuilder builder = new MethodImplementationBuilder(registerCount);
 		LabelAssigner labelAssinger = new LabelAssigner(builder);
-		List<BuilderInstruction> instructions = stmtV.getRealInsns(labelAssinger);
+		List<BuilderInstruction> instructions = stmtV.getRealInsns(labelAssinger); 
 		
 		Map<Instruction, Stmt> instructionStmtMap = stmtV.getInstructionStmtMap();
 		Map<Local, Integer> seenRegisters = new HashMap<Local, Integer>();
+		Map<Instruction, LocalRegisterAssignmentInformation> instructionRegisterMap = stmtV.getInstructionRegisterMap();
         
+
+		for (LocalRegisterAssignmentInformation assignment : stmtV.getParameterInstructionsList()) {
+			addRegisterAssignmentDebugInfo(assignment, seenRegisters, builder);
+		}
     	
-        //Calculate arguments and this registers for the debugging information
-		//Sadly they do not seem to be known already in the StmtVisitor during visiting the IdentityStmts (e.g. the parameter 
-		//registers are said to be 1, 2 ... in non-static methods, although they are registerCount - n, registerCount - n + 1, ...
-		{
-    		int currentIndex = registerCount;
-    		
-        	for (int paramIndex = m.getParameterCount() - 1; paramIndex >= 0; paramIndex--) {
-        		currentIndex -= SootToDexUtils.getDexWords(m.getParameterType(paramIndex));
-        		try {
-        			Local l = activeBody.getParameterLocal(paramIndex);
-        			addRegisterAssignmentDebugInfo(LocalRegisterAssignmentTag.v(new Register(l.getType(), currentIndex), l), seenRegisters, builder);
-        		} catch (Exception e) {
-        		}
-        	}
-        	if (!m.isStatic())
-        	{
-        		currentIndex--;
-        		try {
-	    			Local l = activeBody.getThisLocal();
-	    			addRegisterAssignmentDebugInfo(LocalRegisterAssignmentTag.v(new Register(m.getDeclaringClass().getType(), currentIndex), l), seenRegisters, builder);
-        		} catch (Exception e) {
-        		}
-        	}
-        }
-    	
+    	 
     	
         for (BuilderInstruction ins : instructions) {
             Stmt origStmt = instructionStmtMap.get(ins);
@@ -989,20 +976,15 @@ public class DexPrinter {
             }
             
             builder.addInstruction(ins);
-            if (origStmt != null)
+            LocalRegisterAssignmentInformation registerAssignmentTag = instructionRegisterMap.get(ins);
+            if (registerAssignmentTag != null)
             {
-
 				//Add start local debugging information: Register -> Local assignment
-            	LocalRegisterAssignmentTag registerAssignment = (LocalRegisterAssignmentTag) origStmt.getTag(LocalRegisterAssignmentTag.TAGNAME);
-            	if (registerAssignment != null)
-            	{
-            		addRegisterAssignmentDebugInfo(registerAssignment, seenRegisters, builder);
-            		origStmt.getTags().remove(registerAssignment);
-            	}
+        		addRegisterAssignmentDebugInfo(registerAssignmentTag, seenRegisters, builder);
             }
 		}
 		
-        
+		
 		for (int registersLeft : seenRegisters.values())
 				builder.addEndLocal(registersLeft);
 		toTries(activeBody.getTraps(), stmtV, builder, labelAssinger);
@@ -1014,9 +996,9 @@ public class DexPrinter {
         
         return builder.getMethodImplementation();
 	}
-	
+
 	private void addRegisterAssignmentDebugInfo(
-			LocalRegisterAssignmentTag registerAssignment, Map<Local, Integer> seenRegisters, MethodImplementationBuilder builder) {
+			LocalRegisterAssignmentInformation registerAssignment, Map<Local, Integer> seenRegisters, MethodImplementationBuilder builder) {
 		Local local = registerAssignment.getLocal();
 		String dexLocalType = SootToDexUtils.getDexTypeDescriptor(local.getType());
 		StringReference localName = dexFile.internStringReference(local.getName());
@@ -1026,12 +1008,13 @@ public class DexPrinter {
 		Integer beforeRegister = seenRegisters.get(local);
 		if (beforeRegister != null)
 		{
+			if (beforeRegister == register)
+				//No change
+				return;
 			builder.addEndLocal(beforeRegister);
 		}
-		String decl = local.getType().toString() + " " + local.getName();
-		builder.addStartLocal(register, localName, dexFile.internTypeReference(dexLocalType), dexFile.internStringReference(decl));
+		builder.addStartLocal(register, localName, dexFile.internTypeReference(dexLocalType), dexFile.internStringReference(""));
 		seenRegisters.put(local, register);
-		
 	}
 
 	private void toInstructions(Collection<Unit> units, StmtVisitor stmtV) {
@@ -1114,7 +1097,6 @@ public class DexPrinter {
 					(exceptionType, labelAssigner.getLabel((Stmt) t.getHandlerUnit()).getCodeAddress());
 			
 			List<ExceptionHandler> newHandlers = new ArrayList<ExceptionHandler>();
-			newHandlers.add(exceptionHandler);
 			
 			CodeRange range = new CodeRange(startCodeAddress, endCodeAddress);
 			
@@ -1129,7 +1111,6 @@ public class DexPrinter {
 					List<ExceptionHandler> oldHandlers = codeRangesToTryItem.get(r);
 					if (oldHandlers != null)
 						newHandlers.addAll(oldHandlers);
-					newHandlers.add(exceptionHandler);
 					break;
 				}
 				// Check whether the other range is contained in this range. In this case,
@@ -1143,7 +1124,6 @@ public class DexPrinter {
 					List<ExceptionHandler> oldHandlers = codeRangesToTryItem.get(range);
 					if (oldHandlers != null)
 						newHandlers.addAll(oldHandlers);
-					newHandlers.add(exceptionHandler);
 					
 					// remove the old range, the new one will be added anyway and contain
 					// the merged handlers
@@ -1152,6 +1132,8 @@ public class DexPrinter {
 				}
 			}
 			
+			if (!newHandlers.contains(exceptionHandler))
+				newHandlers.add(exceptionHandler);
 			codeRangesToTryItem.put(range, newHandlers);
 		}
 		for (CodeRange range : codeRangesToTryItem.keySet())

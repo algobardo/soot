@@ -40,6 +40,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import soot.JastAddJ.Modifiers;
 import soot.baf.DoubleWordType;
 import soot.jimple.IdentityStmt;
 import soot.jimple.Stmt;
@@ -286,16 +287,27 @@ public abstract class AbstractJasminClass
         }
         ArrayList<VisibilityAnnotationTag> vis_list = tag.getVisibilityAnnotations();
         if (vis_list != null){
-            Iterator<VisibilityAnnotationTag> it = vis_list.iterator();
-            while (it.hasNext()){
-                sb.append(getVisibilityAnnotationAttr(it.next()));
+            for (VisibilityAnnotationTag vat : vis_list) {
+            	VisibilityAnnotationTag safeVat = vat == null
+            			? getSafeVisibilityAnnotationTag(tag.getKind()) : vat;
+                sb.append(getVisibilityAnnotationAttr(safeVat));
             }
         }
         sb.append(".end .param\n");
         return sb.toString();    
     }
-   
-    private String getElemAttr(AnnotationElem elem){
+    
+    private static Map<Integer, VisibilityAnnotationTag> safeVats =
+    		new HashMap<Integer, VisibilityAnnotationTag>();
+    
+    private VisibilityAnnotationTag getSafeVisibilityAnnotationTag(int kind) {
+    	VisibilityAnnotationTag safeVat = safeVats.get(kind);
+		if (safeVat == null)
+			safeVats.put(kind, safeVat = new VisibilityAnnotationTag(kind));
+		return safeVat;
+	}
+
+	private String getElemAttr(AnnotationElem elem){
         StringBuffer result = new StringBuffer(".elem ");
         switch (elem.getKind()){
             case 'Z': {
@@ -505,11 +517,12 @@ public abstract class AbstractJasminClass
 
 
     // emit synthetic attributes
-    if (sootClass.hasTag("SyntheticTag")){
+    if (sootClass.hasTag("SyntheticTag") || Modifier.isSynthetic(sootClass.getModifiers())){
         emit(".synthetic\n");
     }
     // emit inner class attributes
-    if (sootClass.hasTag("InnerClassAttribute")){
+    InnerClassAttribute ica = (InnerClassAttribute) sootClass.getTag("InnerClassAttribute");
+    if (ica != null && ica.getSpecs().size() > 0){
         if (!Options.v().no_output_inner_classes_attribute()){
             emit(".inner_class_attr ");
             Iterator<Tag> innersIt = ((InnerClassAttribute)sootClass.getTag("InnerClassAttribute")).getSpecs().iterator();
@@ -588,7 +601,7 @@ public abstract class AbstractJasminClass
                     double val = ((DoubleConstantValueTag)field.getTag("DoubleConstantValueTag")).getDoubleValue();
                     fieldString += Double.doubleToRawLongBits(val);
                 }
-                if (field.hasTag("SyntheticTag")){
+                if (field.hasTag("SyntheticTag") || Modifier.isSynthetic(field.getModifiers())){
                     fieldString +=" .synthetic";
                 }
 
@@ -716,7 +729,7 @@ public abstract class AbstractJasminClass
                 SootClass exceptClass = throwsIt.next();
                 emit(".throws "+exceptClass.getName());
             }
-            if (method.hasTag("SyntheticTag")){
+            if (method.hasTag("SyntheticTag") || Modifier.isSynthetic(method.getModifiers())){
                 emit(".synthetic");
             }
             if (method.hasTag("DeprecatedTag")){
